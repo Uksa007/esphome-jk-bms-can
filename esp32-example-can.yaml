@@ -10,11 +10,11 @@ substitutions:
   # --------------------------------------
   # Battery Charging setting:
   # This is max charging amps eg 50A, for Bulk - Constant Current charging(CC), should be at least 10A less than BMS change current protection, 0.5C max
-  charge_a: "50"
+  charge_a: "80"
   # Absorption Voltage for Constant Voltage charging(CV). This is Absorption voltage you want the inverter to change with 55.2 eg 3.45v/cell for 16 cells 48V battery.
   absorption_v: "55.2"
   # Absorption time in minutes to hold charge voltage after charge voltage is reached eg 30
-  absorption_time: "30"
+  absorption_time: "60"
   # Rebulk offset, x Volts below absorption volatge battery will request rebulk, eg 55.2-3 = 52.5v, roughly 90% SOC.
   rebulk_offset: "3"
   # --------------------------------------
@@ -238,6 +238,7 @@ interval:
               
               if (id(absorption_script).is_running()) id(absorption_script).stop();
               id(charge_status) = "Bulk";
+              id(charging_current).state = ${charge_a};
 
             } else if (is_above_rebulk && is_below_absorption) { /// If in startup rebulk
               
@@ -258,24 +259,36 @@ interval:
 
             }
 
-            if (is_full && id(charge_status) != "Disabled") {
-              // Protect against overcharge. This will override all other conditions above
-              if (id(absorption_script).is_running()) id(absorption_script).stop();
-              id(charge_status) = "Wait";
+            if (id(charge_status) != "Disabled") {
+              if (is_full) {
+                // Protect against overcharge. This will override all other conditions above
+                if (id(absorption_script).is_running()) id(absorption_script).stop();
+                id(charge_status) = "Wait";
+              }
+
+              if (id(charging_current).state <= 0.0f) {
+                // If throttled down to 0 amps then we have finished a charge...
+                if (id(absorption_script).is_running()) id(absorption_script).stop();
+                id(charge_status) = "Wait";
+                id(charging_current).state = ${charge_a};
+              }
             }
 
-            if ((id(charge_status) == "Bulk") || (id(charge_status) == "Absorption") || (id(inverter_chg_on).state)) {
+            if ((id(charge_status) == "Bulk") || (id(charge_status) == "Absorption") || manual_charging) {
+              if (near_full) {
+                // Throttle down the current to keep from overvoltage
+                id(charging_current).state -= 1.0f;
+                
+                // Ensure we never go negative
+                if (id(charging_current).state <= 0.0f) id(charging_current).state = 0.0f;
+              }
+              
               auto desired_voltage = uint16_t(id(charging_voltage).state * 10);
               auto desired_current = uint16_t(id(charging_current).state * 10);
 
               if (id(charge_status) == "Absorption") {
-                if (near_full) {
-                  // Use 2A trickle charge when nearly full
-                  desired_current = 2 * 10; // 2A
-                } else {
-                  // Use 1/4 charging current when in the absorption phase
-                  desired_current = desired_current / 4;
-                }
+                // Use 1/4 charging current when in the absorption phase
+                // desired_current = desired_current / 4;
               }
 
               can_mesg[0] = desired_voltage & 0xff;

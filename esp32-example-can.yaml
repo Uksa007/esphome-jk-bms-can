@@ -16,7 +16,7 @@ substitutions:
   # Absorption time in minutes to hold charge voltage after charge voltage is reached eg 30
   absorption_time: "60"
   # Rebulk offset, x Volts below absorption volatge battery will request rebulk, eg 55.2-3 = 52.5v, roughly 90% SOC.
-  rebulk_offset: "3"
+  rebulk_offset: "2.1"
   # --------------------------------------
   # Battery Discharge setting:
   # Max discharge amps eg 100, should be at least 10A less than BMS over dischange current protection, 0.5C max
@@ -71,12 +71,30 @@ globals:
     type: std::string
     restore_value: no
     initial_value: '"Startup"'
+  - id: iteration_counter
+    type: int
+    restore_value: no
+    initial_value: "0"
+  - id: throttled_charge_current
+    type: int
+    restore_value: no
+    initial_value: "0"
 
 button:
   - platform: restart
     name: "Restart button"
     id: restart_button
     internal: true
+
+  # - platform: template
+  #   name: Decrease Charging Current
+  #   id: decrease_charging_current
+  #   icon: "mdi:emoticon-outline"
+  #   on_press:
+  #     - lambda: |-
+  #         auto charging_current_call = charging_current->make_call();
+  #         charging_current_call.number_decrement(false);
+  #         charging_current_call.perform();
 
 wifi:
   ssid: !secret wifi_ssid
@@ -145,6 +163,9 @@ interval:
       - canbus.send: # Warning, Alarms
           can_id: 0x359
           data: !lambda |-
+            id(iteration_counter)++;
+            id(iteration_count).publish_state(id(iteration_counter));
+
             std::vector<uint8_t> can_mesg = {0, 0, 0, 0, 0, 0, 0, 0};
 
             uint16_t jk_errormask = id(errors_bitmask).state;
@@ -200,6 +221,9 @@ interval:
             bool charging_allowed = id(charging_switch).state && id(inverter_charging).state;
             bool charging_disallowed = !charging_allowed;
 
+            bool discharging_allowed = id(discharging_switch).state && id(inverter_discharging).state;
+            bool discharging_disallowed = !discharging_allowed;
+
             bool manual_charging = id(inverter_chg_on).state;
 
             auto rebulk_voltage = id(charging_voltage).state - ${rebulk_offset};
@@ -210,86 +234,107 @@ interval:
             bool is_below_rebulk = id(total_voltage).state <= rebulk_voltage;
             bool is_above_rebulk = !is_below_rebulk;
 
-            bool is_below_absorption = id(total_voltage).state < absorb_voltage && soc < 100;
+            bool is_below_absorption = id(total_voltage).state < absorb_voltage;
             bool is_above_absorption = !is_below_absorption;
 
-            bool near_full = id(max_cell_voltage).state >= 3.5f || id(delta_cell_voltage).state > 0.1f;
+            // This is used to throttle the charge current
+            bool near_full = id(max_cell_voltage).state >= 3.5f || id(delta_cell_voltage).state > 0.08f;
             bool is_full = id(max_cell_voltage).state >= 3.55f;
 
             ESP_LOGI("main", "SOC: %u | MAX: %f | DELTA: %f", soc, id(max_cell_voltage).state, id(delta_cell_voltage).state);
 
             if (charging_disallowed) {
               
+              ESP_LOGI("main", "State Machine: Disabled (Charging Disallowed)");
+
               id(charge_status) = "Disabled";
 
             } else if (manual_charging) {
               
+              ESP_LOGI("main", "State Machine: Bulk Manually (Manual Charging)");
+
               id(charge_status) = "Bulk Manually";
+              id(charging_stopped_cause).publish_state("");
 
             } else if (charging_allowed && id(charge_status) == "Disabled") {
               
+              ESP_LOGI("main", "State Machine: Disabled => Wait");
+
               id(charge_status) = "Wait";
 
             } else if (!manual_charging && id(charge_status) == "Bulk Manually") {
               
+              ESP_LOGI("main", "State Machine: Bulk Manually => Wait");
+              
               id(charge_status) = "Wait";
 
             } else if (is_below_rebulk) { /// Bulk Charge eg 53.6v 10% 
+
+              ESP_LOGI("main", "State Machine: Bulk (Below Rebulk)");
               
               if (id(absorption_script).is_running()) id(absorption_script).stop();
               id(charge_status) = "Bulk";
-              id(charging_current).state = ${charge_a};
+              id(charging_stopped_cause).publish_state("");
+              id(throttled_charge_current) = id(charging_current).state;
 
             } else if (is_above_rebulk && is_below_absorption) { /// If in startup rebulk
               
+              ESP_LOGI("main", "State Machine: (Above Rebulk but Below Absorption)");
+
               if (id(charge_status) == "Startup") {
+                ESP_LOGI("main", "State Machine: Startup => Bulk");
+
                 id(charge_status) = "Bulk"; /// If in startup, 10% low rebulk
+                id(charging_stopped_cause).publish_state("");
+                id(throttled_charge_current) = id(charging_current).state;
               }
 
             } else if (is_above_absorption) { /// 10 % from top start absorption timer
               
+              ESP_LOGI("main", "State Machine: (Is Above Absorption)");
+
               if (id(charge_status) == "Bulk") {
+                ESP_LOGI("main", "State Machine: Bulk => Absorption");
+
                 id(charge_status) = "Absorption";
                 if (!id(absorption_script).is_running()) id(absorption_script).execute();
               }
 
             } else {
 
+              ESP_LOGI("main", "State Machine: Wait (Default)");
+
               id(charge_status) = "Wait";
 
             }
 
             if (id(charge_status) != "Disabled") {
-              if (is_full) {
-                // Protect against overcharge. This will override all other conditions above
+              // Protect against overcharge. This will override all other conditions above
+              // If throttled down to 0 amps then we have finished a charge...
+              if (is_full || id(throttled_charge_current) == 0) {
                 if (id(absorption_script).is_running()) id(absorption_script).stop();
                 id(charge_status) = "Wait";
-              }
 
-              if (id(charging_current).state <= 0.0f) {
-                // If throttled down to 0 amps then we have finished a charge...
-                if (id(absorption_script).is_running()) id(absorption_script).stop();
-                id(charge_status) = "Wait";
-                id(charging_current).state = ${charge_a};
+                id(charging_stopped_cause).publish_state("Overvoltage Protection");
               }
             }
 
-            if ((id(charge_status) == "Bulk") || (id(charge_status) == "Absorption") || manual_charging) {
-              if (near_full) {
-                // Throttle down the current to keep from overvoltage
-                id(charging_current).state -= 1.0f;
-                
-                // Ensure we never go negative
-                if (id(charging_current).state <= 0.0f) id(charging_current).state = 0.0f;
-              }
-              
-              auto desired_voltage = uint16_t(id(charging_voltage).state * 10);
-              auto desired_current = uint16_t(id(charging_current).state * 10);
+            if ((id(charge_status) == "Bulk") || (id(charge_status) == "Absorption") || (id(charge_status) == "Bulk Manually")) {
+              bool every_10_iterations = ((uint32_t)(id(iteration_counter)) % 10) == 0;
 
-              if (id(charge_status) == "Absorption") {
-                // Use 1/4 charging current when in the absorption phase
-                // desired_current = desired_current / 4;
+              if (near_full && every_10_iterations) {
+                // Throttle down the current to keep from overvoltage
+                if (id(throttled_charge_current) > 10) {
+                  // Reduce by 20%
+                  id(throttled_charge_current) = (id(throttled_charge_current) * 4) / 5;
+                } else if (id(throttled_charge_current) > 0) {
+                  // Reduce by 1A
+                  id(throttled_charge_current)--;
+                }
               }
+
+              auto desired_voltage = uint16_t(id(charging_voltage).state * 10);
+              auto desired_current = uint16_t(id(throttled_charge_current) * 10);
 
               can_mesg[0] = desired_voltage & 0xff;
               can_mesg[1] = desired_voltage >> 8 & 0xff;
@@ -302,14 +347,14 @@ interval:
               can_mesg[3] = 0;
             }
 
-            if ((!id(charging_switch).state) || (!id(inverter_charging).state)) { /// Overides to disable charging
+            if (charging_disallowed) { /// Overides to disable charging
               can_mesg[0] = 0;
               can_mesg[1] = 0;
               can_mesg[2] = 0;
               can_mesg[3] = 0;
             }
 
-            if ((id(discharging_switch).state) && (id(inverter_discharging).state)) {
+            if (discharging_allowed) {
               can_mesg[4] = uint16_t(${discharge_a} * 10) & 0xff;
               can_mesg[5] = uint16_t(${discharge_a} * 10) >> 8 & 0xff;
             } else {
@@ -321,6 +366,7 @@ interval:
             can_mesg[7] = uint16_t(${min_dischange_v} * 10) >> 8 & 0xff;
 
             id(charging_status).publish_state(id(charge_status));
+            id(throttled_charge_current_sensor).publish_state(id(throttled_charge_current));
 
             ESP_LOGI("main", "send can id: 0x351 hex: %x %x %x %x %x %x %x %x", can_mesg[0], can_mesg[1], can_mesg[2], can_mesg[3], can_mesg[4], can_mesg[5], can_mesg[6], can_mesg[7]);
             ESP_LOGI("main", "send can id: Charge Status %s", id(charge_status).c_str());
@@ -338,8 +384,10 @@ interval:
             auto soh = uint16_t(round(((id(charging_cycles).state / ${max_cycles}) - 1) * -100));
 
             // Fool the inverter into continuing to charge beyond what the BMS thinks is "100%"
-            if (soc == 100 && id(charge_status) == "Absorption") {
-              soc = 99;
+            if (id(charge_status) == "Bulk" || id(charge_status) == "Absorption") {
+              if (soc == 100) {
+                soc = 99;
+              }
             }
 
             can_mesg[0] = soc & 0xff; /// 15 & 0xff; 
@@ -675,6 +723,13 @@ sensor:
                 (minutes ? to_string(minutes) + "m " : "") +
                 (to_string(seconds) + "s")
               ).c_str();
+  - platform: template
+    name: "${name} Iteration Count"
+    id: iteration_count
+  - platform: template
+    name: "${name} Throttled Charge Current"
+    id: throttled_charge_current_sensor
+    unit_of_measurement: A
 
 text_sensor:
   - platform: jk_bms
@@ -702,6 +757,9 @@ text_sensor:
   - platform: template
     name: "${name} Charging Status"
     id: charging_status
+  - platform: template
+    name: "${name} Charging Stopped Cause"
+    id: charging_stopped_cause
 
 # Slider
 number:
@@ -727,13 +785,19 @@ number:
     unit_of_measurement: A
     icon: mdi:current-dc
     optimistic: true
+    set_action: 
+      - lambda: |-
+          id(throttled_charge_current) = x;
+          id(throttled_charge_current_sensor).publish_state(id(throttled_charge_current));
 
 script:
   - id: absorption_script
     then:
       - lambda: id(charge_status) = "Absorption";
       - delay: ${absorption_time}min
-      - lambda: id(charge_status) = "Wait";
+      - lambda: |-
+          id(charge_status) = "Wait";
+          id(charging_stopped_cause).publish_state("Absorption Complete");
 
 switch:
   - platform: template

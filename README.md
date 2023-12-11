@@ -7,6 +7,11 @@
 
 ESPHome component to monitor a Jikong Battery Management System (JK-BMS) via RS485 or BLE
 
+## Note this has code been depricated if favour of [Hardware interface kits](https://github.com/Uksa007/esphome-jk-bms-can/discussions/16)
+This has resulted as I spent all my time trying to help people build hardware with little to no electronics experience, and then configuring and compiling the firmware was not easy for most. Most want it all with support for nothing. I no longer have the time.
+
+The solution is I supply the hardware kit configured how you want, plug and play, you end up with a quality product as opposed to modules connected with dupont connectors which were unreliable at best.
+
 ## This fork supports CAN bus communication with inverters supporting the CANBUS Protocol compatible with Pylontech V1.3 and Goodwe V1.5.
 Note Pylontech uses 15s/48v Goodwe uses 16s/51.2v @3.2v/cell nominal.
 Other battery profiles that utilise the pylonton/goodwe protocol with differnt cell counts may also work, eg Alpha Ess Smile, BYD Battery-Box LV Flex Lite 
@@ -178,8 +183,7 @@ Optional below, as seen in pic above: RS485 between JK-BMS GPS port and ESP32, u
 The RS485-TTL jack of the BMS can be attached to any UART pins of the ESP. A hardware UART should be preferred because of the high baudrate (115200 baud). The connector is called 4 Pin JST with 1.25mm pitch.
 
 ## Firmware releases for direct flashing to ESP32
-I will be releasing Firmware for direct flashing to ESP32 using [ESPHome-flasher](https://github.com/esphome/esphome-flasher/releases)
-Subsquent updates or if you have my Harware interface, can be perfomred from the [Web Server OTA](http://jk-bms-interface) (on the bottom of the web page)
+This code is old has been depricated.
 
 ## Optional add to Home Assistant
 In Home Assistant under settings->Intergration "Add Intergration" select ESPHome add device jk-bms-can if found or supply ip address of ESP32

@@ -16,7 +16,7 @@ The solution is I supply the hardware kit configured how you want, plug and play
 [I would recommend the 200A model B2A20S20P](https://s.click.aliexpress.com/e/_Dl3owdX) if you are planning on constant change/discharge of 150A, better to have a little head room.
 This model has a 2A active balancer and 8-20S LiFePO4
 You have to click view more and select the correct model, Note model is the Color:
-Work in porgess to support the new inverter style Jk-BMS, see below for supported devices.
+Work in progess to support the new inverter style Jk-BMS, see below for supported devices.
 
 ## This fork supports CAN bus communication with inverters supporting the CANBUS Protocol compatible with Pylontech V1.3 and Goodwe V1.5.
 Note Pylontech uses 15s/48v Goodwe uses 16s/51.2v @3.2v/cell nominal.

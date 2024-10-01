@@ -12,6 +12,35 @@ This has resulted as I spent all my time trying to help people build hardware wi
 
 The solution is I supply the hardware kit configured how you want, plug and play, you end up with a quality product as opposed to modules connected with dupont connectors which were unreliable at best.
 
+iBMS: Interface for BMS [available here](https://shop.jamestronics.com)
+
+Isolated CAN1/2 for Multi-BMS
+
+This all new Interface is designed with many features:
+
+- Updated design specifically for Muli-BMS use with Isolated CAN1/2 ports, dedicated Isolated CAN Power supply and new Isolated CAN driver with +-70 bus fault protection.
+- Supports Most Inverters with CAN communications, profiles for: BYD, Deye, Generic, Goodwe, Pylon, Victron, LIA (beta)
+- New iBMS firmware completely written in esp-idf using 100% my own code, no more esp-home.
+- New companion Home Assistant integration(custom component must be installed)
+- Web page designed for mobile phone size screens
+- The one board can be used with a standalone battery or used in a multi BMS setup, software configurable as a Master or Slave(1-9).&nbsp; One board needed per BMS&nbsp;
+- Future proof, can be used with the original JK-BMS or the new Inverter type.
+- One board to rule them all.
+- DIP switches to enable CAN termination.
+- Improved CAN bus driver chip now fully isolated
+- TVS Transient voltage suppression, to protect the CAN driver chip.
+- On board buck converter with resettable fuse.
+
+The original JK-BMS with the 4 pin connecter supplies power to board, plug and play.<br>
+Note: Inverter type, must be powered direct from battery 12-60v, with the included cable. 2 temperature sensors displayed with newer JK-BMS <br>
+Professionally manufactured and burn in testing.<br>
+Lead free construction, greener and low environmental impact!
+
+Supported inverter models in addition to the original BD JK-BMS:
+JK-PB1A16S10P / JK-PB1A16S15P / JK-PB2A16S15P / JK-PB1A16S20P / JK-PB2A16S20P
+
+iBMS: Interface for BMS [available here](https://shop.jamestronics.com)
+
 ## Which JK BMS should I order, you should order this model:
 [I would recommend the 200A model B2A20S20P](https://s.click.aliexpress.com/e/_Dl3owdX) if you are planning on constant change/discharge of 150A, better to have a little head room.
 This model has a 2A active balancer and 8-20S LiFePO4

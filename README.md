@@ -7,7 +7,7 @@
 
 ESPHome component to monitor a Jikong Battery Management System (JK-BMS) via RS485 or BLE
 
-## Note this has code been depricated if favour of [Hardware interface kits](https://github.com/Uksa007/esphome-jk-bms-can/discussions/16)
+## Note this has code been depricated in favour of [iBMS interface for BMS](https://shop.jamestronics.com)
 This has resulted as I spent all my time trying to help people build hardware with little to no electronics experience, and then configuring and compiling the firmware was not easy for most. Most want it all with support for nothing. I no longer have the time.
 
 The solution is I supply the hardware kit configured how you want, plug and play, you end up with a quality product as opposed to modules connected with dupont connectors which were unreliable at best.

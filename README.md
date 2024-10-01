@@ -23,7 +23,7 @@ Note Pylontech uses 15s/48v Goodwe uses 16s/51.2v @3.2v/cell nominal.
 Other battery profiles that utilise the pylonton/goodwe protocol with differnt cell counts may also work, eg Alpha Ess Smile, BYD Battery-Box LV Flex Lite 
 Select the correct battery profile in the inverter to match your battery pack!
 
-**New: Plug and play Hardware interface see [here for more info](https://github.com/Uksa007/esphome-jk-bms-can/discussions/16)**
+**New: Plug and play Hardware interface see [here for more info: iBMS interface for BMS](https://shop.jamestronics.com)**
 
 The ESP32 communicates with the JK-BMS using the RS485 port(GPS) which is in fact not RS485, it is 3.3V TTL so it can be directly connected to the ESP32.
 The ESP32 then sends the required CAN bus data to the inverter via a TJA1050 CAN bus transceiver.
